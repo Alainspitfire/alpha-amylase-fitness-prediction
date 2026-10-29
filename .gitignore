@@ -218,3 +218,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# Downloaded dataset and embedding caches
+data/
+embeddings_*.npz
+
+# Colab bundle metadata
+bundle_checksums.json
+BUNDLE_NOTES.txt
+
+# Notebook temporary files
+.ipynb_checkpoints/
