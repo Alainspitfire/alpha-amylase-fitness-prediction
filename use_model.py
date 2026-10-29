@@ -1,19 +1,22 @@
-
-"""Alpha-amylase fitness inference CLI: Transformer-only or hybrid ensemble."""
+"""Alpha-amylase fitness prediction, comparison, screening, and ranking."""
 
 import argparse
 import csv
 import json
+import math
+import random
 import shutil
 import sys
 import zipfile
 from pathlib import Path
 
+
 AA = "ACDEFGHIKLMNPQRSTVWY"
 SEEDS = (42, 123, 2026)
 
 TRANSFORMER_FILES = tuple(
-    f"outputs_rank/rank_seed_{s}.pt" for s in SEEDS
+    f"outputs_rank/rank_seed_{seed}.pt"
+    for seed in SEEDS
 )
 
 HYBRID_FILES = (
@@ -23,39 +26,36 @@ HYBRID_FILES = (
 )
 
 
-# ============================================================
-# 1. REQUIRED FILES AND INSTALLATION
-# ============================================================
-
 def requirements(model):
-    source = ["data.py", "model_mutation_effect.py"]
+    sources = ["data.py", "model_mutation_effect.py"]
     weights = list(TRANSFORMER_FILES)
 
     if model == "hybrid":
-        source.append("predict_hybrid.py")
+        sources.append("predict_hybrid.py")
         weights.extend(HYBRID_FILES)
 
-    return source, weights
+    return sources, weights
 
 
 def install_weights(archive_path, root):
-    """Unpack recognized weights from a trained-model ZIP."""
+    """Install recognized model files from a ZIP archive."""
+    targets = TRANSFORMER_FILES + HYBRID_FILES
 
-    all_targets = TRANSFORMER_FILES + HYBRID_FILES
-
-    with zipfile.ZipFile(archive_path) as zf:
+    with zipfile.ZipFile(archive_path) as archive:
         entries = {}
 
-        for info in zf.infolist():
+        for info in archive.infolist():
             if info.is_dir():
                 continue
 
-            for target in all_targets:
+            for target in targets:
                 parts = Path(target).parts
 
                 if Path(info.filename).parts[-len(parts):] == parts:
                     if target in entries:
-                        raise ValueError(f"Duplicate ZIP entry: {target}")
+                        raise ValueError(
+                            f"Duplicate ZIP entry: {target}"
+                        )
 
                     entries[target] = info
 
@@ -68,9 +68,12 @@ def install_weights(archive_path, root):
 
         for target, info in entries.items():
             destination = root / target
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
 
-            with zf.open(info) as source:
+            with archive.open(info) as source:
                 with destination.open("wb") as output:
                     shutil.copyfileobj(source, output)
 
@@ -81,22 +84,17 @@ def check_files(root, model):
     sources, weights = requirements(model)
 
     missing = [
-        f for f in sources + weights
-        if not (root / f).is_file()
+        name
+        for name in sources + weights
+        if not (root / name).is_file()
     ]
 
     if missing:
         raise FileNotFoundError(
-            "Missing files for " + model + ":\n  "
+            f"Missing files for {model}:\n  "
             + "\n  ".join(missing)
-            + "\nDownload the repository source and "
-              "model weights, then run setup."
         )
 
-
-# ============================================================
-# 2. LET USER CHOOSE MODEL
-# ============================================================
 
 def select_model(value):
     if value:
@@ -108,15 +106,12 @@ def select_model(value):
             "when not interactive"
         )
 
-    print("\n===== SELECT PREDICTION MODEL =====")
-    print("1. Mutation-aware Transformer")
-    print("   Faster; no ESM-2 required")
-    print()
-    print("2. Hybrid Transformer + ESM-2 Ridge")
-    print("   Better overall fitness ranking")
+    print("\nSelect prediction model:")
+    print("1. Mutation-aware Transformer ensemble")
+    print("2. Hybrid Transformer + ESM–Ridge")
 
     while True:
-        choice = input("\nEnter 1 or 2: ").strip().lower()
+        choice = input("Enter 1 or 2: ").strip().lower()
 
         if choice in ("1", "transformer"):
             return "transformer"
@@ -127,12 +122,8 @@ def select_model(value):
         print("Please enter 1 or 2.")
 
 
-# ============================================================
-# 3. LOAD STANDALONE TRANSFORMER ENSEMBLE
-# ============================================================
-
 class TransformerOnly:
-    """Load the three ranking-trained Transformer checkpoints."""
+    """Load the three Transformer checkpoints once."""
 
     def __init__(self, root):
         import torch
@@ -141,7 +132,6 @@ class TransformerOnly:
         from model_mutation_effect import MutationEffectTransformer
 
         self.torch = torch
-
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
@@ -151,11 +141,8 @@ class TransformerOnly:
         self.reference = None
 
         for relative in TRANSFORMER_FILES:
-            path = root / relative
-
-            # Only use trusted checkpoint files.
             checkpoint = torch.load(
-                path,
+                root / relative,
                 map_location="cpu",
                 weights_only=True,
             )
@@ -164,7 +151,6 @@ class TransformerOnly:
 
             if self.reference is None:
                 self.reference = reference
-
             elif reference != self.reference:
                 raise ValueError(
                     "Reference sequences differ between checkpoints"
@@ -184,7 +170,6 @@ class TransformerOnly:
             model.eval()
 
             self.models.append(model)
-
             self.stats.append((
                 float(checkpoint["mean"]),
                 float(checkpoint["std"]),
@@ -205,28 +190,20 @@ class TransformerOnly:
 
         with torch.inference_mode():
             for model, (mean, std) in zip(
-                self.models, self.stats
+                self.models,
+                self.stats,
             ):
                 normalized = model(x)
-
-                fitness = (
-                    normalized.item() * std + mean
-                )
-
-                values.append(float(fitness))
+                value = normalized.item() * std + mean
+                values.append(float(value))
 
         return {
             "predicted_fitness": sum(values) / len(values)
         }
 
 
-# ============================================================
-# 4. LOAD SELECTED MODEL
-# ============================================================
-
 def load_model(root, model):
     check_files(root, model)
-
     sys.path.insert(0, str(root))
 
     if model == "transformer":
@@ -237,10 +214,6 @@ def load_model(root, model):
     return HybridPredictor(root)
 
 
-# ============================================================
-# 5. READ AND VALIDATE PROTEIN SEQUENCES
-# ============================================================
-
 def read_sequence(sequence, fasta):
     if sequence and fasta:
         raise ValueError(
@@ -248,12 +221,10 @@ def read_sequence(sequence, fasta):
         )
 
     if fasta:
-        lines = Path(fasta).read_text().splitlines()
-
         records = []
         current = []
 
-        for line in lines:
+        for line in Path(fasta).read_text().splitlines():
             line = line.strip()
 
             if not line:
@@ -297,13 +268,8 @@ def validate(sequence, reference):
         )
 
 
-# ============================================================
-# 6. FITNESS PREDICTION
-# ============================================================
-
 def fitness(predictor, sequence, model):
     validate(sequence, predictor.reference)
-
     raw = predictor.predict(sequence)
 
     result = {
@@ -317,7 +283,6 @@ def fitness(predictor, sequence, model):
         result["transformer_fitness"] = float(
             raw["transformer_fitness"]
         )
-
         result["esm_ridge_fitness"] = float(
             raw["esm_ridge_fitness"]
         )
@@ -325,9 +290,310 @@ def fitness(predictor, sequence, model):
     return result
 
 
-# ============================================================
-# 7. COMMAND-LINE INTERFACE
-# ============================================================
+def read_ranking_input(
+    csv_path=None,
+    fasta_path=None,
+    sequence_column="sequence",
+    fitness_column=None,
+):
+    """Read CSV or multi-record FASTA candidates."""
+    rows = []
+
+    if fasta_path:
+        identifier = None
+        fragments = []
+
+        def append_record():
+            if identifier is None:
+                return
+
+            if not fragments:
+                raise ValueError(
+                    f"Empty FASTA record: {identifier}"
+                )
+
+            rows.append({
+                "id": identifier,
+                "source_row": len(rows) + 1,
+                "sequence": "".join(fragments).upper(),
+            })
+
+        for line in Path(fasta_path).read_text().splitlines():
+            line = line.strip()
+
+            if not line:
+                continue
+
+            if line.startswith(">"):
+                append_record()
+
+                identifier = (
+                    line[1:].strip()
+                    or f"sequence_{len(rows) + 1}"
+                )
+                fragments = []
+            else:
+                if identifier is None:
+                    raise ValueError(
+                        "FASTA sequence appears before its header"
+                    )
+
+                fragments.append("".join(line.split()))
+
+        append_record()
+
+    else:
+        with Path(csv_path).open(
+            newline="",
+            encoding="utf-8-sig",
+        ) as handle:
+            reader = csv.DictReader(handle)
+            fields = reader.fieldnames or []
+
+            if sequence_column not in fields:
+                raise ValueError(
+                    "CSV is missing sequence column: "
+                    f"{sequence_column}"
+                )
+
+            if fitness_column is None:
+                fitness_column = next(
+                    (
+                        name
+                        for name in (
+                            "experimental_fitness",
+                            "target",
+                        )
+                        if name in fields
+                    ),
+                    None,
+                )
+            elif fitness_column not in fields:
+                raise ValueError(
+                    "CSV is missing fitness column: "
+                    f"{fitness_column}"
+                )
+
+            for number, record in enumerate(reader, 1):
+                sequence = "".join(
+                    (record.get(sequence_column) or "").split()
+                ).upper()
+
+                row = {
+                    "id": (
+                        record.get("id")
+                        or f"sequence_{number}"
+                    ),
+                    "source_row": number,
+                    "sequence": sequence,
+                }
+
+                if fitness_column is not None:
+                    try:
+                        actual = float(
+                            record.get(fitness_column, "")
+                        )
+                    except (TypeError, ValueError) as error:
+                        raise ValueError(
+                            "Invalid experimental fitness "
+                            f"in CSV row {number}"
+                        ) from error
+
+                    if not math.isfinite(actual):
+                        raise ValueError(
+                            "Non-finite experimental fitness "
+                            f"in CSV row {number}"
+                        )
+
+                    row["experimental_fitness"] = actual
+
+                rows.append(row)
+
+    if not rows:
+        raise ValueError("No candidate sequences found")
+
+    return rows
+
+
+def descending_ranks(values):
+    """Higher scores rank first. Ties share ranks: 1, 1, 3."""
+    ranks = {}
+
+    for number, value in enumerate(
+        sorted(values, reverse=True),
+        1,
+    ):
+        ranks.setdefault(value, number)
+
+    return ranks
+
+
+def rank_sequences(predictor, rows, model, output):
+    """Predict each unique sequence once and rank candidates."""
+
+    # Validate all selected sequences before starting predictions.
+    for row in rows:
+        try:
+            validate(
+                row["sequence"],
+                predictor.reference,
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"Candidate {row['id']} "
+                f"(row {row['source_row']}): {error}"
+            ) from error
+
+    cache = {}
+
+    for number, row in enumerate(rows, 1):
+        sequence = row["sequence"]
+
+        if sequence not in cache:
+            result = fitness(
+                predictor,
+                sequence,
+                model,
+            )
+
+            if not all(
+                math.isfinite(value)
+                for key, value in result.items()
+                if key != "model"
+            ):
+                raise ValueError(
+                    "Non-finite prediction for "
+                    f"candidate {row['id']}"
+                )
+
+            cache[sequence] = result
+
+        row.update(cache[sequence])
+
+        row["mutation_count"] = sum(
+            a != b
+            for a, b in zip(
+                sequence,
+                predictor.reference,
+            )
+        )
+
+        if (
+            number == 1
+            or number % 10 == 0
+            or number == len(rows)
+        ):
+            print(
+                f"Predicted {number}/{len(rows)} candidates",
+                flush=True,
+            )
+
+    prediction_ranks = descending_ranks([
+        row["predicted_fitness"]
+        for row in rows
+    ])
+
+    has_labels = all(
+        "experimental_fitness" in row
+        for row in rows
+    )
+
+    if has_labels:
+        actual_ranks = descending_ranks([
+            row["experimental_fitness"]
+            for row in rows
+        ])
+
+    for row in rows:
+        row["predicted_rank"] = prediction_ranks[
+            row["predicted_fitness"]
+        ]
+
+        if has_labels:
+            row["experimental_rank"] = actual_ranks[
+                row["experimental_fitness"]
+            ]
+
+            row["absolute_error"] = abs(
+                row["predicted_fitness"]
+                - row["experimental_fitness"]
+            )
+
+    # Stable ordering preserves input order when scores tie.
+    rows.sort(
+        key=lambda row: row["predicted_fitness"],
+        reverse=True,
+    )
+
+    fields = [
+        "predicted_rank",
+        "model",
+        "id",
+        "source_row",
+        "sequence",
+        "predicted_fitness",
+    ]
+
+    if model == "hybrid":
+        fields += [
+            "transformer_fitness",
+            "esm_ridge_fitness",
+        ]
+
+    fields += ["mutation_count"]
+
+    if has_labels:
+        fields += [
+            "experimental_fitness",
+            "experimental_rank",
+            "absolute_error",
+        ]
+
+    output = Path(output)
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with output.open("w", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fields,
+        )
+
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(
+        f"\nSaved {len(rows)} candidates "
+        f"({len(cache)} unique sequences): {output}"
+    )
+
+    print(
+        "Ranks are within these candidates only; "
+        "higher fitness ranks first."
+    )
+
+    print(
+        "Ties share ranks (1, 1, 3); "
+        "tied rows retain their input order."
+    )
+
+    for row in rows[:10]:
+        actual = (
+            f" | experimental={row['experimental_fitness']:.6f}"
+            if has_labels
+            else ""
+        )
+
+        print(
+            f"{row['predicted_rank']}. {row['id']} | "
+            f"fitness={row['predicted_fitness']:.6f}"
+            f"{actual}"
+        )
+
+    return rows
+
 
 def cli():
     parser = argparse.ArgumentParser(
@@ -338,7 +604,7 @@ def cli():
         "--root",
         type=Path,
         default=Path(__file__).resolve().parent,
-        help="Directory holding model scripts and checkpoints",
+        help="Directory containing model scripts and checkpoints",
     )
 
     sub = parser.add_subparsers(
@@ -346,88 +612,115 @@ def cli():
         required=True,
     )
 
-    # SETUP
+    # Setup.
     setup = sub.add_parser(
         "setup",
-        help="Install/check required model files",
+        help="Install/check model files",
     )
-
-    setup.add_argument(
-        "--weights-zip",
-        type=Path,
-    )
-
+    setup.add_argument("--weights-zip", type=Path)
     setup.add_argument(
         "--model",
         choices=("transformer", "hybrid"),
         default="hybrid",
     )
 
-    # FITNESS
+    # Predict one sequence.
     pfit = sub.add_parser(
         "fitness",
         help="Predict fitness for one sequence",
     )
-
     pfit.add_argument(
         "--model",
         choices=("transformer", "hybrid"),
     )
-
     pfit.add_argument("--sequence")
     pfit.add_argument("--fasta", type=Path)
 
-    # COMPARE TWO MUTANTS
+    # Compare two sequences.
     pcmp = sub.add_parser(
         "compare",
-        help="Compare mutant B versus mutant A",
+        help="Compare mutant B against mutant A",
     )
-
     pcmp.add_argument(
         "--model",
         choices=("transformer", "hybrid"),
     )
+    pcmp.add_argument("--sequence-a", required=True)
+    pcmp.add_argument("--sequence-b", required=True)
 
-    pcmp.add_argument(
-        "--sequence-a",
-        required=True,
-    )
-
-    pcmp.add_argument(
-        "--sequence-b",
-        required=True,
-    )
-
-    # SCREEN MUTATIONS
+    # Screen substitutions at one reference position.
     pscreen = sub.add_parser(
         "screen",
         help="Rank all 19 substitutions at one position",
     )
-
     pscreen.add_argument(
         "--model",
         choices=("transformer", "hybrid"),
     )
-
     pscreen.add_argument(
         "--position",
         type=int,
         required=True,
     )
-
     pscreen.add_argument(
         "--output",
         type=Path,
         default=Path("screening_results.csv"),
     )
 
+    # Predict and rank a batch of existing sequences.
+    prank = sub.add_parser(
+        "rank",
+        help="Predict and rank CSV or multi-record FASTA candidates",
+    )
+    prank.add_argument(
+        "--model",
+        choices=("transformer", "hybrid"),
+        default="hybrid",
+    )
+
+    inputs = prank.add_mutually_exclusive_group()
+
+    inputs.add_argument(
+        "--csv",
+        type=Path,
+        help="Default: ROOT/official_split/test_unseen.csv",
+    )
+    inputs.add_argument(
+        "--fasta",
+        type=Path,
+        help="Multi-record FASTA containing candidate sequences",
+    )
+
+    prank.add_argument(
+        "--sequence-column",
+        default="sequence",
+    )
+    prank.add_argument(
+        "--fitness-column",
+        help=(
+            "Optional experimental label column; "
+            "auto-detect experimental_fitness or target"
+        ),
+    )
+    prank.add_argument(
+        "--sample",
+        type=int,
+        help="Randomly select this many candidates before inference",
+    )
+    prank.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+    )
+    prank.add_argument(
+        "--output",
+        type=Path,
+        default=Path("ranked_predictions.csv"),
+    )
+
     args = parser.parse_args()
-
     root = args.root.expanduser().resolve()
-
-    # --------------------------------------------------------
-    # SETUP
-    # --------------------------------------------------------
 
     if args.command == "setup":
         if args.weights_zip:
@@ -436,36 +729,89 @@ def cli():
         check_files(root, args.model)
 
         print(f"Setup complete for {args.model}.")
-
         print(
             "Install dependencies: "
             "python -m pip install -r requirements.txt"
         )
-
         print(
             "Hybrid inference may download ESM-2 "
             "from Hugging Face on first use."
         )
-
         return
 
-    # --------------------------------------------------------
-    # MODEL SELECTION
-    # --------------------------------------------------------
+    ranking_rows = None
+
+    if args.command == "rank":
+        if args.sample is not None and args.sample < 1:
+            parser.error("--sample must be positive")
+
+        if args.fasta and args.fitness_column:
+            parser.error(
+                "--fitness-column applies only to CSV input"
+            )
+
+        csv_path = args.csv or (
+            None
+            if args.fasta
+            else root / "official_split/test_unseen.csv"
+        )
+
+        input_path = Path(
+            args.fasta or csv_path
+        ).expanduser().resolve()
+
+        if args.output.expanduser().resolve() == input_path:
+            parser.error(
+                "Output must differ from the input file"
+            )
+
+        ranking_rows = read_ranking_input(
+            csv_path=(
+                input_path if not args.fasta else None
+            ),
+            fasta_path=(
+                input_path if args.fasta else None
+            ),
+            sequence_column=args.sequence_column,
+            fitness_column=args.fitness_column,
+        )
+
+        if args.sample is not None:
+            if args.sample > len(ranking_rows):
+                parser.error(
+                    "--sample exceeds input size "
+                    f"({len(ranking_rows)})"
+                )
+
+            indices = sorted(
+                random.Random(args.seed).sample(
+                    range(len(ranking_rows)),
+                    args.sample,
+                )
+            )
+
+            ranking_rows = [
+                ranking_rows[index]
+                for index in indices
+            ]
 
     model = select_model(args.model)
 
     print(f"\nSelected model: {model}")
 
+    # Load once for the entire command.
     predictor = load_model(root, model)
-
     reference = predictor.reference
 
-    # --------------------------------------------------------
-    # FITNESS
-    # --------------------------------------------------------
+    if args.command == "rank":
+        rank_sequences(
+            predictor,
+            ranking_rows,
+            model,
+            args.output.expanduser(),
+        )
 
-    if args.command == "fitness":
+    elif args.command == "fitness":
         sequence = (
             read_sequence(args.sequence, args.fasta)
             or reference
@@ -478,10 +824,6 @@ def cli():
         )
 
         print(json.dumps(result, indent=2))
-
-    # --------------------------------------------------------
-    # COMPARE
-    # --------------------------------------------------------
 
     elif args.command == "compare":
         a = read_sequence(args.sequence_a, None)
@@ -508,16 +850,12 @@ def cli():
             "delta_b_minus_a": delta,
             "differences": changes,
             "note": (
-                "Predicted difference, not an "
-                "experimentally confirmed mutation effect."
+                "Predicted difference, not an experimentally "
+                "confirmed mutation effect."
             ),
         }, indent=2))
 
-    # --------------------------------------------------------
-    # SCREEN
-    # --------------------------------------------------------
-
-    else:
+    elif args.command == "screen":
         position = args.position
 
         if not 1 <= position <= len(reference):
@@ -554,9 +892,7 @@ def cli():
             rows.append({
                 "mutation": f"{original}{position}{aa}",
                 "predicted_fitness": score,
-                "predicted_delta_vs_reference": (
-                    score - ref_score
-                ),
+                "predicted_delta_vs_reference": score - ref_score,
             })
 
         rows.sort(
