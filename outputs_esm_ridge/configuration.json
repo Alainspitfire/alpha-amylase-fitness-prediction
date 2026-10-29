@@ -1,0 +1,6 @@
+{
+  "esm_model": "facebook/esm2_t33_650M_UR50D",
+  "alpha": 100.0,
+  "features": "delta mean embedding + mutation count",
+  "selection": "validation Spearman"
+}

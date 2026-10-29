@@ -1,0 +1,77 @@
+ESM model: facebook/esm2_t33_650M_UR50D
+Device: cuda
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1793308823.688343    1743 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1793308823.719859    1743 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1793308824.960557    1743 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1793308824.960883    1743 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+Some weights of EsmModel were not initialized from the model checkpoint at facebook/esm2_t33_650M_UR50D and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Embedded 2/3706
+Embedded 100/3706
+Embedded 200/3706
+Embedded 300/3706
+Embedded 400/3706
+Embedded 500/3706
+Embedded 600/3706
+Embedded 700/3706
+Embedded 800/3706
+Embedded 900/3706
+Embedded 1000/3706
+Embedded 1100/3706
+Embedded 1200/3706
+Embedded 1300/3706
+Embedded 1400/3706
+Embedded 1500/3706
+Embedded 1600/3706
+Embedded 1700/3706
+Embedded 1800/3706
+Embedded 1900/3706
+Embedded 2000/3706
+Embedded 2100/3706
+Embedded 2200/3706
+Embedded 2300/3706
+Embedded 2400/3706
+Embedded 2500/3706
+Embedded 2600/3706
+Embedded 2700/3706
+Embedded 2800/3706
+Embedded 2900/3706
+Embedded 3000/3706
+Embedded 3100/3706
+Embedded 3200/3706
+Embedded 3300/3706
+Embedded 3400/3706
+Embedded 3500/3706
+Embedded 3600/3706
+Embedded 3700/3706
+
+===== RIDGE VALIDATION =====
+/usr/local/lib/python3.13/dist-packages/scipy/_lib/_util.py:1233: LinAlgWarning: Ill-conditioned matrix (rcond=1.69752e-09): result may not be accurate.
+  return f(*arrays, *other_args, **kwargs)
+Alpha:     0.01 | Val Spearman: 0.58183
+/usr/local/lib/python3.13/dist-packages/scipy/_lib/_util.py:1233: LinAlgWarning: Ill-conditioned matrix (rcond=1.42349e-08): result may not be accurate.
+  return f(*arrays, *other_args, **kwargs)
+Alpha:      0.1 | Val Spearman: 0.62870
+Alpha:        1 | Val Spearman: 0.69902
+Alpha:       10 | Val Spearman: 0.73813
+Alpha:      100 | Val Spearman: 0.75529
+Alpha:     1000 | Val Spearman: 0.74816
+
+Selected alpha: 100.0
+
+===== TRAIN =====
+MSE: 0.001030
+Spearman: 0.7762
+
+===== VAL =====
+MSE: 0.001349
+Spearman: 0.7553
+
+===== TEST =====
+MSE: 0.001795
+Spearman: 0.6431
+
+Saved to: /content/amylase_official_ca63rf8a/outputs_esm_ridge

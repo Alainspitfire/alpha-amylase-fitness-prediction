@@ -1,0 +1,32 @@
+===== VALIDATION BLENDING =====
+Transformer weight: 0.0 | Validation Spearman: 0.75529
+Transformer weight: 0.1 | Validation Spearman: 0.76250
+Transformer weight: 0.2 | Validation Spearman: 0.76641
+Transformer weight: 0.3 | Validation Spearman: 0.76783
+Transformer weight: 0.4 | Validation Spearman: 0.76761
+Transformer weight: 0.5 | Validation Spearman: 0.76624
+Transformer weight: 0.6 | Validation Spearman: 0.76282
+Transformer weight: 0.7 | Validation Spearman: 0.75881
+Transformer weight: 0.8 | Validation Spearman: 0.75162
+Transformer weight: 0.9 | Validation Spearman: 0.74332
+Transformer weight: 1.0 | Validation Spearman: 0.73085
+
+===== SELECTED ENSEMBLE =====
+Transformer weight: 0.30000000000000004
+ESM weight: 0.7
+Validation Spearman: 0.767834126599593
+
+===== VAL =====
+MSE: 0.001074
+MAE: 0.026096
+Spearman: 0.76783
+Pairwise accuracy: 94.28%
+
+===== TEST =====
+MSE: 0.001382
+MAE: 0.029744
+Spearman: 0.67365
+Pairwise accuracy: 90.88%
+
+Saved ensemble configuration and predictions:
+/content/amylase_official_ca63rf8a/outputs_blend

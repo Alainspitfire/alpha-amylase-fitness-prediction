@@ -1,0 +1,40 @@
+{
+  "dataset": "FLIP2 alpha-amylase",
+  "split": "Official by-mutation",
+  "split_manifest": {
+    "protocol": "Official FLIP2 alpha-amylase by-mutation",
+    "reference": "LTAPSIKSGTILHAWNWSFNTLKHNMKDIHDAGYTAIQTSPINQVKEGNQGDKSMSNWYWLYQPTSYQIGNRYLGTEQEFKEMCAAAEEYGIKVIVDAVINHTTSDYAAISNEVKSIPNWTHGNTPIKNWSDRWDVTQNSLSGLYDWNTQNTQVQSYLKRFLDRALNDGADGFRFDAAKHIELPDDGSYGSQFWPNITNTSAEFQYGEILQDSVSRDAAYANYMDVTASNYGHSIRSALKNRNLGVSNISHYAVDVSADKLVTWVESHDTYANDDEESTWMSDDDIRLGWAVIASRSGSTPLFFSRPEGGGNGVRFPGKSQIGDRGSALFEDQAITAVNRFHNVMAGQPEELSNPNGNNQIFMNQRGSHGVVLANAGSSSVSINTATKLPDGRYDNKAGAGSFQVNDGKLTGTINARSVAVLYPD",
+    "reference_definition": "Consensus from official training only",
+    "train_size": 2403,
+    "validation_size": 601,
+    "test_size": 702
+  },
+  "ensemble_config": {
+    "model_type": "Transformer_ESM2_Ridge_Hybrid",
+    "transformer_weight": 0.30000000000000004,
+    "esm_weight": 0.7,
+    "transformer_seeds": [
+      42,
+      123,
+      2026
+    ],
+    "esm_model": "facebook/esm2_t33_650M_UR50D",
+    "validation_spearman": 0.767834126599593,
+    "selection_metric": "validation_spearman",
+    "feature_definition": "delta mean embedding + mutation count"
+  },
+  "expected_counts": {
+    "train": 2403,
+    "val": 601,
+    "test": 702
+  },
+  "evaluation": "Saved predictions; no fitting or model selection in this evaluator",
+  "prior_official_test_inspection": true,
+  "note": "Follow-up experiment after inspection of earlier official-test results",
+  "pairwise_minimum_fitness_gap": 0.03,
+  "topk_high_fitness_definition": "Top ceil(10% of test N); stable ordering for ties",
+  "bootstrap_replicates": 2000,
+  "bootstrap_seed": 42,
+  "bootstrap_method": "Paired sequence resampling; 95% percentile intervals",
+  "bootstrap_limitation": "Related variants may violate sequence independence"
+}

@@ -1,0 +1,14 @@
+{
+  "model_type": "Transformer_ESM2_Ridge_Hybrid",
+  "transformer_weight": 0.30000000000000004,
+  "esm_weight": 0.7,
+  "transformer_seeds": [
+    42,
+    123,
+    2026
+  ],
+  "esm_model": "facebook/esm2_t33_650M_UR50D",
+  "validation_spearman": 0.767834126599593,
+  "selection_metric": "validation_spearman",
+  "feature_definition": "delta mean embedding + mutation count"
+}
