@@ -1,0 +1,15 @@
+
+torch
+torchvision
+transformers
+accelerate
+safetensors
+sentencepiece
+scikit-learn
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+tqdm
+requests
