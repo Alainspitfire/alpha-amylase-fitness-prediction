@@ -1,6 +1,6 @@
 # Alpha-Amylase Fitness Prediction
 
-A proof-of-concept project for predicting experimental fitness and ranking alpha-amylase variants.
+A proof-of-concept project for predicting assay-specific starch-stain removal activity (“fitness”) and ranking alpha-amylase variants.
 
 The main application is **prioritizing candidate variants for experimental testing**. The project provides two prediction options: a lightweight Transformer ensemble and a hybrid combining that ensemble with ESM–Ridge.
 
@@ -105,6 +105,30 @@ Inference reads the saved weights from the configuration. Retraining may select 
 Pairwise accuracy considers the **128,045 test pairs** whose experimental fitness differs by at least **0.03**. Prediction ties receive half credit.
 
 The hybrid's 90.88% pairwise accuracy therefore describes pairs with sufficiently separated experimental fitness. It is not an accuracy percentage for all predictions or all sequence pairs.
+
+### Comparison with Published and Internal Baselines
+
+FLIP2 reports Spearman correlations of 0.648 for Ridge using one-hot
+features and 0.681 for Ridge using one-hot features plus likelihoods
+on the alpha-amylase by-mutation benchmark. This project's Transformer
+achieved 0.661 and its hybrid achieved 0.674, placing both point estimates
+between those published baselines.
+
+Within this project, the Transformer also outperformed an internally
+trained ESM–Ridge baseline on observed Spearman correlation
+(0.661 versus 0.643), pairwise accuracy at a minimum experimental fitness
+gap of 0.03 (90.32% versus 88.38%), and high-fitness hits among the top
+10 predictions (9 versus 6). This ESM–Ridge baseline is not a reproduction
+of the published FLIP2 Ridge models. Statistical uncertainty for the
+direct Transformer–ESM–Ridge differences was not evaluated.
+
+The top-10 results support the Transformer's potential usefulness for
+candidate prioritization despite its slightly lower Spearman than the strongest
+listed published baseline. However, superiority over published models
+in top-k selection, numerical accuracy, or computational cost has not
+been established. No state-of-the-art performance claim is made.
+
+Source: [FLIP2, Table A4](https://flip.protein.properties/assets/FLIP_manuscipt.pdf).
 
 ### Bootstrap Comparisons
 
@@ -262,7 +286,18 @@ The model loads once for the complete command. Output includes numerical fitness
 
 **Rank 1 means highest predicted fitness within the submitted candidates.** Ties share ranks, such as 1, 1, 3.
 
-Optional CSV labels named `experimental_fitness` or `target` are detected automatically and used only for comparison. Custom columns can be specified using `--sequence-column` and `--fitness-column`.
+Optional CSV labels named `experimental_fitness` or `target` are detected
+automatically and used only for comparison. If either column is present,
+every row must contain a finite numeric value. For unlabeled candidates,
+omit both columns entirely.
+
+A sequence from the training data may be included as a reference alongside
+new candidates. Keep its known experimental fitness separately when the
+other candidates are unlabeled. Including a reference does not recalibrate
+the model, and its prediction is not an independent test of generalization.
+
+Custom columns can be specified using `--sequence-column` and
+`--fitness-column`.
 
 ### Try the Official Test Data
 
@@ -325,6 +360,20 @@ python train_official.py \
 A smaller ESM batch size may help if GPU memory is insufficient.
 
 The training scripts print test metrics after fitting. Do not use those values to tune subsequent settings.
+
+### Reproduction Notes
+
+Use `train_official.py` as the training entry point. When running
+`train_rank.py` or `train_esm_ridge.py` directly, explicitly pass
+`--split-dir official_split`; their default points to the older
+`mutation_holdout` directory.
+
+Detailed evaluation is a separate step after training, as shown below.
+
+`requirements.txt` contains unpinned dependencies. The installation command
+above pins several packages, while `runtime_versions.json` records the
+original environment. Exact numerical reproduction across environments
+is not guaranteed.
 
 ## Evaluate the Supplied Predictions
 
