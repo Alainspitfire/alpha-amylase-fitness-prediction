@@ -83,15 +83,20 @@ One-hot Ridge selected **alpha = 10** using validation Spearman. The ESM-likelih
 
 This adapted baseline excludes CARP and Dayhoff features and does not reproduce the full published augmented Ridge model. Superiority over that published model in numerical accuracy, top-k selection, or computational cost has not been established.
 
-To reproduce the ESM-likelihood comparison:
+To reproduce the additional baselines:
 
 ```bash
+python train_onehot_ridge.py --root .
 python train_onehot_esm_likelihood.py --root .
 ```
 
-The script generates `outputs_onehot_esm_likelihood/`. Archived baseline summaries and matched test predictions are under `alpha_amylase_baseline_results/`.
+These generate `outputs_onehot_comparison/` and
+`outputs_onehot_esm_likelihood/`, respectively. Archived summaries and
+matched test predictions are under `alpha_amylase_baseline_results/`.
 
-### Bootstrap Comparisons
+The baseline scripts run separately from `train_official.py`.
+
+### Bootstrap
 
 Paired bootstrap intervals use **2,000 resamples** of test sequences.
 
@@ -155,6 +160,7 @@ bootstrap_model_comparison.py  Additional bootstrap tool
 data.py                        Dataset download and encoding
 model_mutation_effect.py       Transformer architecture
 predict_hybrid.py              Hybrid loading and inference
+train_onehot_ridge.py          One-hot Ridge baseline and comparison
 use_model.py                   Prediction and ranking commands
 requirements.txt
 runtime_versions.json
@@ -165,14 +171,7 @@ outputs_rank/                  Transformer checkpoints and predictions
 outputs_esm_ridge/             Ridge parameters and predictions
 outputs_blend/                 Hybrid configuration and predictions
 outputs_official_test/         Metrics, intervals, and plots
-
-alpha_amylase_baseline_results/
-    outputs_onehot_comparison/
-        comparison_metrics.csv
-        matched_test_predictions.csv
-    outputs_onehot_esm_likelihood/
-        comparison_metrics.csv
-        matched_test_predictions.csv
+alpha_amylase_baseline_results/ Internal one-hot baseline comparisons inspired by FLIP2
 ```
 
 ## Predict Fitness and Rank Candidates
