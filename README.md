@@ -2,99 +2,57 @@
 
 A proof-of-concept project for predicting assay-specific starch-stain removal activity (“fitness”) and ranking alpha-amylase variants.
 
-The main application is **prioritizing candidate variants for experimental testing**. The project provides two prediction options: a lightweight Transformer ensemble and a hybrid combining that ensemble with ESM–Ridge.
-
-The repository includes training code, trained parameters, inference tools, official split records, and evaluation results.
+The main application is **prioritizing candidates for experimental testing**. The repository includes training code, trained parameters, prediction tools, official partitions, and evaluation results.
 
 [Run fitness prediction and ranking in Colab](PREDICTION_GUIDE.md)
 
-## Models
+## Models and Selection
 
-- **Transformer:** An ensemble of three mutation-aware Transformers trained with regression and pairwise ranking losses. It provides the strongest numerical fitness predictions in this experiment and runs without ESM-2.
-- **ESM–Ridge:** Ridge regression on frozen ESM-2 embedding differences and mutation count. It is a component of the hybrid and an evaluation baseline.
-- **Hybrid:** A validation-selected combination of **30% Transformer + 70% ESM–Ridge**. It achieved the highest observed overall ranking scores, although its advantage over the Transformer was inconclusive under bootstrap resampling.
+- **Transformer:** Three mutation-aware Transformers trained with regression and pairwise ranking losses. Best numerical accuracy and top-10 selection among the models evaluated here; runs without ESM-2.
+- **ESM–Ridge:** Ridge regression on frozen ESM-2 mean embedding differences and mutation count. A hybrid component and internal baseline.
+- **Hybrid:** A validation-selected blend of **30% Transformer + 70% ESM–Ridge**. Highest observed overall ranking scores, but its ranking advantage over the Transformer was inconclusive under bootstrap resampling.
 
-Both user-facing options, `transformer` and `hybrid`, predict numerical fitness values. The `rank` command sorts those values to rank candidates.
-
-## Which Model Should I Select?
-
-| Your goal | Suggested option | Reason |
+| Goal | Suggested option | Reason |
 |---|---|---|
-| Predict numerical fitness values | **Transformer** | Lower MAE and RMSE on the official test |
-| Run predictions with fewer computational resources | **Transformer** | Does not load the 650M-parameter ESM backbone |
-| Obtain an initial candidate shortlist | **Transformer** | Strong top-k results and lower computational cost |
-| Explore overall ranking across a candidate collection | **Hybrid** | Highest observed Spearman and pairwise accuracy |
-| Compare prediction strategies before experiments | **Both** | Examine differences in predicted fitness and candidate ordering |
+| Estimate numerical fitness | **Transformer** | Lowest test MAE and RMSE |
+| Screen with fewer computational resources | **Transformer** | Does not load the 650M-parameter ESM backbone |
+| Prioritize a small candidate shortlist | **Transformer** | Strongest observed top-10 and top-50 selection |
+| Explore overall candidate ordering | **Hybrid** | Highest observed Spearman and pairwise accuracy |
 
-**Practical starting point:** use the Transformer for numerical prediction and an efficient first screening pass. Use the hybrid when overall ordering is your primary objective and the additional ESM computation is acceptable.
+Both options predict continuous fitness values; ranking sorts those predictions. Recommendations reflect this experiment and may not hold for new candidate collections.
 
-The hybrid is not consistently better at selecting the very best few candidates: the Transformer found more high-fitness variants in the top 10 and top 50 in this test.
+Predictions can support candidate selection, variant comparison, and substitution screening. They are not probabilities of success or experimentally confirmed mutation effects.
 
-These recommendations describe this experiment's results. They do not guarantee the same ordering of model performance on new candidate collections.
+## Dataset and Training
 
-## What Are the Predictions Useful For?
-
-### Candidate prioritization
-
-Rank a collection of compatible alpha-amylase variants and shortlist candidates for activity assays. This can help allocate experimental effort when testing every candidate is impractical.
-
-### Approximate fitness estimation
-
-Estimate fitness on the dataset's experimental target scale. The Transformer is the stronger option for this task in the reported evaluation.
-
-These outputs are continuous estimates, not probabilities of success.
-
-### Comparing variants
-
-Compare predicted fitness between two sequences to identify which the model expects to perform better.
-
-A predicted difference is a screening signal. It does not establish a causal mutation effect or confirm that an improvement will occur experimentally.
-
-### Exploring substitutions
-
-The `screen` command ranks the 19 possible substitutions at one position in the saved reference sequence. This can generate hypotheses for subsequent experiments.
-
-Screening an arbitrary substitution is not equivalent to experimentally validating it.
-
-### Scope
-
-The supported application is prediction within the alpha-amylase sequence and assay setting represented by this dataset. Performance on unrelated proteins, different assay conditions, or substantially different sequences has not been established.
-
-## Dataset and Training Protocol
-
-This project uses the FLIP2 alpha-amylase **by-mutation** dataset and its official partitions:
+The project uses the FLIP2 alpha-amylase **by-mutation** dataset:
 
 | Partition | Sequences | Purpose |
 |---|---:|---|
 | Training | 2,403 | Fit Transformer models, feature scaling, and Ridge coefficients |
-| Validation | 601 | Select checkpoints, Ridge regularization, and blend weight |
-| Test | 702 | Evaluate the selected models |
+| Validation | 601 | Select checkpoints, regularization, and blend weight |
+| Test | 702 | Evaluate selected models |
 
-The reference is a consensus computed from official training sequences only.
+The reference is a **consensus computed from training sequences only**, not necessarily the experimental wild type. Legacy filenames `train_unseen.csv`, `val_unseen.csv`, and `test_unseen.csv` contain the official partitions. The downloader verifies the dataset using an expected MD5 checksum.
 
-For compatibility with the trainers, the split filenames remain `train_unseen.csv`, `val_unseen.csv`, and `test_unseen.csv`. Their contents are the **official partitions**.
+Model settings:
 
-The dataset downloader verifies the downloaded archive using an expected MD5 checksum.
-
-### Model Selection
-
-- Transformer seeds: **42, 123, and 2026**
-- Transformer checkpoint selection: **validation MSE**
-- ESM backbone: **`facebook/esm2_t33_650M_UR50D`**, kept frozen
-- Ridge features: mean-pooled embedding difference from the reference, plus mutation count
-- Ridge regularization: **alpha = 100**, selected using validation Spearman
-- Hybrid weight: selected using validation Spearman from weights spaced by 0.1
-- Selected hybrid validation Spearman: **0.76783**
-
-The supplied hybrid uses:
+- Transformer seeds: **42, 123, 2026**; checkpoints selected by validation MSE.
+- Frozen ESM backbone: **`facebook/esm2_t33_650M_UR50D`**.
+- ESM–Ridge features: mean-pooled embedding difference from the reference plus mutation count.
+- ESM–Ridge alpha: **100**, selected by validation Spearman.
+- Hybrid weight: selected by validation Spearman on a grid spaced by 0.1.
+- Selected hybrid validation Spearman: **0.76783**.
 
 ```text
-Predicted fitness = 0.30 × Transformer + 0.70 × ESM–Ridge
+Predicted hybrid fitness = 0.30 × Transformer + 0.70 × ESM–Ridge
 ```
 
-Inference reads the saved weights from the configuration. Retraining may select different weights.
+Inference uses saved configuration weights; retraining may select different weights.
 
 ## Official Test Results
+
+Results cover **702 sequences**.
 
 | Model | MSE ↓ | MAE ↓ | RMSE ↓ | Pearson ↑ | Spearman ↑ | Pairwise accuracy ↑ |
 |---|---:|---:|---:|---:|---:|---:|
@@ -102,37 +60,15 @@ Inference reads the saved weights from the configuration. Retraining may select 
 | ESM–Ridge | 0.001795 | 0.034504 | 0.042364 | 0.654055 | 0.643054 | 88.38% |
 | Hybrid | 0.001382 | 0.029744 | 0.037169 | 0.725605 | **0.673649** | **90.88%** |
 
-Pairwise accuracy considers the **128,045 test pairs** whose experimental fitness differs by at least **0.03**. Prediction ties receive half credit.
+Pairwise accuracy evaluates **128,045 pairs** with experimental fitness differences **≥0.03**; prediction ties receive half credit. It is not accuracy across all predictions or all sequence pairs.
 
-The hybrid's 90.88% pairwise accuracy therefore describes pairs with sufficiently separated experimental fitness. It is not an accuracy percentage for all predictions or all sequence pairs.
+### Published and Additional Baselines
 
-### Comparison with Published and Internal Baselines
-
-FLIP2 reports Spearman correlations of 0.648 for Ridge using one-hot
-features and 0.681 for Ridge using one-hot features plus likelihoods
-on the alpha-amylase by-mutation benchmark. This project's Transformer
-achieved 0.661 and its hybrid achieved 0.674, placing both point estimates
-between those published baselines.
-
-Within this project, the Transformer also outperformed an internally
-trained ESM–Ridge baseline on observed Spearman correlation
-(0.661 versus 0.643), pairwise accuracy at a minimum experimental fitness
-gap of 0.03 (90.32% versus 88.38%), and high-fitness hits among the top
-10 predictions (9 versus 6). This ESM–Ridge baseline is not a reproduction
-of the published FLIP2 Ridge models. Statistical uncertainty for the
-direct Transformer–ESM–Ridge differences was not evaluated.
-
-The top-10 results support the Transformer's potential usefulness for
-candidate prioritization despite its slightly lower Spearman than the strongest
-listed published baseline. However, superiority over published models
-in top-k selection, numerical accuracy, or computational cost has not
-been established. No state-of-the-art performance claim is made.
+FLIP2 reports Spearman of **0.648** for one-hot Ridge and **0.681** for one-hot + likelihoods Ridge. Our Transformer (0.661) and hybrid (0.674) fall between those published point estimates.
 
 Source: [FLIP2, Table A4](https://flip.protein.properties/assets/FLIP_manuscipt.pdf).
 
-### Additional One-Hot Baseline Comparisons
-
-Two additional baselines were evaluated on the same 702 test sequences:
+Two additional internal baselines were evaluated on the same test sequences:
 
 | Model | MSE ↓ | MAE ↓ | Spearman ↑ | Pairwise@0.03 ↑ | Top-10 hits ↑ |
 |---|---:|---:|---:|---:|---:|
@@ -141,31 +77,23 @@ Two additional baselines were evaluated on the same 702 test sequences:
 | Transformer | **0.001148** | **0.022796** | 0.661013 | 90.32% | **9** |
 | Hybrid | 0.001382 | 0.029744 | **0.673649** | **90.88%** | 8 |
 
-Both the Transformer and hybrid improved all listed metrics over these
-baselines. These are descriptive comparisons; the bootstrap intervals
-below do not cover the additional one-hot baselines.
+Both models improved all listed metrics over these internal baselines. These comparisons are descriptive; the bootstrap intervals below do not cover the additional one-hot baselines or the direct Transformer–ESM–Ridge comparison.
 
-One-hot Ridge selected alpha = 10 using validation Spearman. The
-one-hot + ESM-2 likelihood baseline used fixed alpha = 10 and appended
-the frozen ESM-2 model's unmasked mean residue log-probability to the
-one-hot features. Its target scaler used training and validation labels,
-while Ridge coefficients were fitted on training rows only. Errors
-were evaluated on the original fitness scale.
+One-hot Ridge selected **alpha = 10** using validation Spearman. The ESM-likelihood baseline used fixed **alpha = 10**, adding the frozen ESM-2 model’s unmasked mean residue log-probability to one-hot features. Its target scaler used training and validation labels; Ridge coefficients were fitted on training rows only. Errors were calculated on the original fitness scale.
 
-This adapted baseline excludes CARP and Dayhoff scores and does not
-reproduce the full published FLIP2 augmented Ridge model.
+This adapted baseline excludes CARP and Dayhoff features and does not reproduce the full published augmented Ridge model. Superiority over that published model in numerical accuracy, top-k selection, or computational cost has not been established.
 
-To reproduce the ESM-2 likelihood comparison:
+To reproduce the ESM-likelihood comparison:
 
 ```bash
 python train_onehot_esm_likelihood.py --root .
 ```
 
-Results are saved in `outputs_onehot_esm_likelihood/`.
+The script generates `outputs_onehot_esm_likelihood/`. Archived baseline summaries and matched test predictions are under `alpha_amylase_baseline_results/`.
 
 ### Bootstrap Comparisons
 
-Paired bootstrap intervals use 2,000 resamples of test sequences.
+Paired bootstrap intervals use **2,000 resamples** of test sequences.
 
 | Comparison | Metric | Hybrid minus baseline | 95% interval |
 |---|---|---:|---:|
@@ -174,40 +102,27 @@ Paired bootstrap intervals use 2,000 resamples of test sequences.
 | Hybrid − ESM–Ridge | Spearman | +0.030595 | [+0.018814, +0.042369] |
 | Hybrid − ESM–Ridge | Pairwise accuracy | +0.025015 | [+0.018265, +0.032297] |
 
-The hybrid's ranking advantage over the Transformer is **inconclusive** because both difference intervals include zero. Its ranking improvement over ESM–Ridge is supported by intervals excluding zero.
+The hybrid’s ranking advantage over the Transformer is **inconclusive** because both intervals include zero. Its improvement over ESM–Ridge is supported under this analysis. The Transformer has lower MAE and MSE than the hybrid, with difference intervals excluding zero.
 
-The Transformer has lower MAE and MSE than the hybrid, with bootstrap difference intervals excluding zero in the Transformer's favor.
-
-Related variants may violate the assumption that sequences can be resampled independently.
+Related variants may violate the assumption of independent sequence resampling.
 
 ### Top-K Discovery
 
-High-fitness variants are defined as the top `ceil(0.10 × 702) = 71` test variants by experimental fitness.
+High-fitness hits belong to the **71 highest-fitness test variants**: `ceil(0.10 × 702)`.
 
-| Model | High-fitness hits in top 10 | In top 25 | In top 50 |
+| Model | Hits in top 10 | Top 25 | Top 50 |
 |---|---:|---:|---:|
 | Transformer | 9 | 17 | 27 |
 | ESM–Ridge | 6 | 14 | 23 |
 | Hybrid | 8 | 17 | 26 |
 
-These results show that overall ranking performance and top-candidate discovery are different objectives. A higher Spearman correlation does not guarantee a better top-10 shortlist.
+Higher overall Spearman does not guarantee better top-candidate selection. These top-k differences are descriptive; their uncertainty was not evaluated.
 
-Top-k comparisons are descriptive; uncertainty for these differences was not evaluated.
-
-### Interpretation
-
-The results support a proof of concept for alpha-amylase candidate prioritization.
-
-- The Transformer is stronger at predicting numerical fitness in this experiment.
-- The hybrid has the highest observed overall ranking scores.
-- The hybrid's ranking advantage over the Transformer is not statistically conclusive under the reported bootstrap.
-- Neither model has been prospectively validated on newly designed candidates.
-
-Earlier official-test results were inspected during development. This run is therefore reported as a **follow-up experiment**, even though the selection code uses validation data.
+Earlier official-test results were inspected during development. This is an **exploratory follow-up experiment**, even though model selection uses validation data.
 
 ## Installation
 
-Run commands from the repository root.
+Run from the repository root:
 
 ```bash
 python -m pip install -r requirements.txt \
@@ -221,57 +136,61 @@ python -m pip install -r requirements.txt \
     "matplotlib==3.10.0"
 ```
 
-The recorded training environment used Python **3.13.16** and PyTorch **2.11.0+cu130**. See `runtime_versions.json` for the recorded environment.
+The recorded training environment used Python **3.13.16** and PyTorch **2.11.0+cu130**; see `runtime_versions.json`. Install a PyTorch build appropriate for your platform.
 
-Install a PyTorch build appropriate for your platform and CUDA environment. A CUDA GPU is recommended for training and hybrid inference. The scripts use CPU when CUDA is unavailable.
+A CUDA GPU is recommended for training and ESM-based inference; scripts fall back to CPU. Internet access is required for initial dataset and ESM downloads. The pretrained backbone is not bundled.
 
-Internet access is required for the initial dataset and pretrained ESM backbone downloads. The pretrained backbone is not bundled with the repository.
+`requirements.txt` is unpinned; the command above pins several dependencies. Exact numerical reproduction across environments is not guaranteed. Restart the notebook session after changing already imported packages.
 
 ## Repository Layout
 
 ```text
-train_official.py              Official-split training entry point
-train_rank.py                  Transformer ensemble training
-train_esm_ridge.py             ESM feature extraction and Ridge fitting
-blend_predictions.py          Validation-based hybrid selection
-evaluate_official_split.py    Saved-prediction evaluation
-bootstrap_model_comparison.py Additional bootstrap comparison tool
-data.py                       Dataset download and sequence encoding
-model_mutation_effect.py      Transformer architecture
-predict_hybrid.py             Hybrid model loading and inference
-use_model.py                  User-facing prediction commands
-train_onehot_esm_likelihood.py  One-hot + ESM-2 likelihood Ridge comparison
+train_official.py               Official-split training entry point
+train_rank.py                   Transformer ensemble training
+train_esm_ridge.py              ESM embeddings and Ridge fitting
+train_onehot_esm_likelihood.py  Additional likelihood-based baseline
+blend_predictions.py           Validation-based hybrid selection
+evaluate_official_split.py     Saved-prediction evaluation
+bootstrap_model_comparison.py  Additional bootstrap tool
+data.py                        Dataset download and encoding
+model_mutation_effect.py       Transformer architecture
+predict_hybrid.py              Hybrid loading and inference
+use_model.py                   Prediction and ranking commands
 requirements.txt
 runtime_versions.json
 PREDICTION_GUIDE.md
 
-official_split/               Official partitions and reference manifest
-outputs_rank/                 Transformer checkpoints and predictions
-outputs_esm_ridge/            Ridge parameters, configuration, predictions
-outputs_blend/                Hybrid configuration and predictions
-outputs_official_test/        Metrics, predictions, intervals, and plots
-outputs_onehot_comparison/     One-hot Ridge comparison results
-outputs_onehot_esm_likelihood/ One-hot + ESM-2 likelihood results
+official_split/                Official partitions and reference
+outputs_rank/                  Transformer checkpoints and predictions
+outputs_esm_ridge/             Ridge parameters and predictions
+outputs_blend/                 Hybrid configuration and predictions
+outputs_official_test/         Metrics, intervals, and plots
+
+alpha_amylase_baseline_results/
+    outputs_onehot_comparison/
+        comparison_metrics.csv
+        matched_test_predictions.csv
+    outputs_onehot_esm_likelihood/
+        comparison_metrics.csv
+        matched_test_predictions.csv
 ```
 
 ## Predict Fitness and Rank Candidates
 
-Input sequences must contain **425 standard amino-acid residues**, aligned to the saved reference. Insertions, deletions, and ambiguous symbols are unsupported.
+Inputs must contain **425 standard amino-acid residues**, aligned to the saved reference. Insertions, deletions, and ambiguous symbols are unsupported.
 
-### Check the Model Files
+Check required files:
 
 ```bash
 python use_model.py setup --model transformer
 python use_model.py setup --model hybrid
 ```
 
-The setup command checks file presence; it does not verify prediction accuracy.
-
-All three Transformer checkpoints are required. Hybrid inference additionally requires `ridge_head.npz`, both model configurations, and the pretrained ESM backbone.
+`setup` checks file presence, not prediction accuracy. Both options require all three Transformer checkpoints. Hybrid inference additionally requires the Ridge parameters, both model configurations, and downloaded ESM backbone.
 
 ### Predict One Sequence
 
-For numerical fitness prediction with the Transformer:
+Use a single-record FASTA:
 
 ```bash
 python use_model.py fitness \
@@ -279,28 +198,11 @@ python use_model.py fitness \
     --fasta sequence.fasta
 ```
 
-For hybrid prediction:
+Replace `transformer` with `hybrid` to use the hybrid.
 
-```bash
-python use_model.py fitness \
-    --model hybrid \
-    --fasta sequence.fasta
-```
+### Rank Candidates
 
-Each FASTA file above must contain exactly one sequence.
-
-### Rank Multiple Candidates
-
-Use a CSV containing a `sequence` column:
-
-```bash
-python use_model.py rank \
-    --model transformer \
-    --csv candidates.csv \
-    --output ranked_predictions.csv
-```
-
-Use the hybrid:
+For CSV input with a `sequence` column:
 
 ```bash
 python use_model.py rank \
@@ -309,7 +211,7 @@ python use_model.py rank \
     --output ranked_predictions.csv
 ```
 
-Multi-record FASTA input is also supported:
+For multi-record FASTA:
 
 ```bash
 python use_model.py rank \
@@ -318,22 +220,13 @@ python use_model.py rank \
     --output ranked_predictions.csv
 ```
 
-The model loads once for the complete command. Output includes numerical fitness predictions and ranks.
+Use `--model transformer` for Transformer-only predictions.
 
-**Rank 1 means highest predicted fitness within the submitted candidates.** Ties share ranks, such as 1, 1, 3.
+**Rank 1 is the highest predicted fitness among submitted candidates.** Ties share ranks, such as 1, 1, 3. The model loads once per command.
 
-Optional CSV labels named `experimental_fitness` or `target` are detected
-automatically and used only for comparison. If either column is present,
-every row must contain a finite numeric value. For unlabeled candidates,
-omit both columns entirely.
+Optional labels named `experimental_fitness` or `target` are detected automatically and used only for comparison. Label columns must contain finite numeric values in every row; omit both columns for unlabeled candidates. Custom columns can be specified with `--sequence-column` and `--fitness-column`.
 
-A sequence from the training data may be included as a reference alongside
-new candidates. Keep its known experimental fitness separately when the
-other candidates are unlabeled. Including a reference does not recalibrate
-the model, and its prediction is not an independent test of generalization.
-
-Custom columns can be specified using `--sequence-column` and
-`--fitness-column`.
+A training sequence may be included as a reference alongside new candidates. Keep its known fitness separately if other candidates are unlabeled. Including a reference does not recalibrate predictions or provide an independent generalization test.
 
 ### Try the Official Test Data
 
@@ -345,13 +238,11 @@ python use_model.py rank \
     --output test_sample_rankings.csv
 ```
 
-This randomly selects 20 sequences from the bundled official test partition. Remove `--sample 20` to predict and rank all 702 sequences.
+This samples 20 bundled test sequences. Remove `--sample 20` to predict all 702. This demonstrates inference; it is not a new independent evaluation.
 
-This is an inference demonstration, not a new independent evaluation.
+### Compare Variants or Screen Substitutions
 
-### Compare Two Variants
-
-Replace the placeholders with complete amino-acid sequences:
+Replace placeholders with complete sequences:
 
 ```bash
 python use_model.py compare \
@@ -360,9 +251,7 @@ python use_model.py compare \
     --sequence-b "SEQUENCE_B"
 ```
 
-### Screen One Position
-
-For example, rank the 19 substitutions at reference position 100:
+Rank the 19 substitutions at reference position 100:
 
 ```bash
 python use_model.py screen \
@@ -371,19 +260,19 @@ python use_model.py screen \
     --output position_100_screen.csv
 ```
 
-This screen uses the saved reference sequence as the background.
+Screening uses the saved consensus as the sequence background. Predicted differences require experimental confirmation.
 
-## Train a New Model
+## Train and Evaluate
+
+Train a new run:
 
 ```bash
 python train_official.py
 ```
 
-This prepares the official partitions, constructs the reference, trains both components, selects the blend, and saves artifacts and metadata.
+This prepares the official partitions, constructs the reference, trains both components, and selects the blend. Artifacts are saved to `official_run/`; nonempty output directories are rejected.
 
-The new run is written to `official_run/`, preserving the supplied results. The script refuses to use a nonempty output directory.
-
-To customize the run:
+Optional settings:
 
 ```bash
 python train_official.py \
@@ -393,25 +282,9 @@ python train_official.py \
     --esm-batch-size 2
 ```
 
-A smaller ESM batch size may help if GPU memory is insufficient.
+When running either component trainer directly, pass `--split-dir official_split`; their default points to the older `mutation_holdout` directory.
 
-The training scripts print test metrics after fitting. Do not use those values to tune subsequent settings.
-
-### Reproduction Notes
-
-Use `train_official.py` as the training entry point. When running
-`train_rank.py` or `train_esm_ridge.py` directly, explicitly pass
-`--split-dir official_split`; their default points to the older
-`mutation_holdout` directory.
-
-Detailed evaluation is a separate step after training, as shown below.
-
-`requirements.txt` contains unpinned dependencies. The installation command
-above pins several packages, while `runtime_versions.json` records the
-original environment. Exact numerical reproduction across environments
-is not guaranteed.
-
-## Evaluate the Supplied Predictions
+Detailed evaluation is separate. For the supplied predictions:
 
 ```bash
 python evaluate_official_split.py \
@@ -422,15 +295,7 @@ python evaluate_official_split.py \
     --seed 42
 ```
 
-The evaluator checks split sizes, sequence overlap, labels, and blend consistency. It saves regression and ranking metrics, subgroup results, top-k results, paired bootstrap intervals, and plots.
-
-It evaluates **saved prediction CSVs**. It does not reload checkpoints or rerun inference.
-
-Evaluation files with matching names are overwritten.
-
-## Evaluate a Newly Trained Run
-
-After `python train_official.py` completes:
+For a newly trained default run:
 
 ```bash
 python official_run/evaluate_official_split.py \
@@ -441,29 +306,32 @@ python official_run/evaluate_official_split.py \
     --seed 42
 ```
 
-To use the newly trained models:
+The evaluator checks partitions, labels, and blend consistency, then generates metrics, subgroup results, top-k results, intervals, and plots. It evaluates **saved CSV predictions**, not freshly loaded checkpoints. Matching evaluation files are overwritten.
+
+Predict using a newly trained run:
 
 ```bash
 python use_model.py --root official_run \
     rank --model hybrid --csv candidates.csv
 ```
 
+Training scripts print test metrics after fitting. Do not use them to tune subsequent settings.
+
 ## Limitations
 
-- Evaluation covers one alpha-amylase dataset and a fixed sequence alignment.
+- Results cover one alpha-amylase assay and a fixed sequence alignment.
 - Generalization to other proteins, assay conditions, or substantially different sequences has not been established.
-- Numerical predictions and mutation comparisons require experimental confirmation.
-- Predicted fitness is not a probability of experimental success.
-- The hybrid does not consistently outperform the Transformer across metrics or screening budgets.
-- Related sequences can affect bootstrap uncertainty estimates.
-- Hardware and dependency versions can produce numerical differences.
+- Newly designed variants have not been prospectively validated.
+- Predictions are continuous assay estimates, not probabilities of success.
+- The hybrid does not consistently outperform the Transformer across objectives.
+- Related sequences and execution environments can affect uncertainty estimates and numerical results.
 - Official-test results were inspected during earlier development.
-- This project does not implement the FSFP method described by Zhou et al.; that paper is cited as related work.
-- No state-of-the-art performance claim is made.
+- This project does not implement Zhou et al.’s FSFP method; it is cited as related work.
+- No state-of-the-art claim is made.
 
 ## Dataset Attribution
 
-The dataset is distributed through FLIP2. The experimental measurements are not original contributions of this repository.
+The dataset is distributed through FLIP2. Experimental measurements are not original contributions of this repository.
 
 - [FLIP2 paper](https://proceedings.mlr.press/v306/didi26a.html)
 - [Dataset archive](https://doi.org/10.5281/zenodo.18433203)
@@ -472,7 +340,6 @@ The dataset is distributed through FLIP2. The experimental measurements are not 
 ## AI-Assisted Development
 
 ChatGPT assisted with code development, debugging, evaluation workflows, and documentation. Reported performance values come from computational evaluations of the models.
-
 
 ## Reference
 
