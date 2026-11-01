@@ -130,6 +130,39 @@ been established. No state-of-the-art performance claim is made.
 
 Source: [FLIP2, Table A4](https://flip.protein.properties/assets/FLIP_manuscipt.pdf).
 
+### Additional One-Hot Baseline Comparisons
+
+Two additional baselines were evaluated on the same 702 test sequences:
+
+| Model | MSE ↓ | MAE ↓ | Spearman ↑ | Pairwise@0.03 ↑ | Top-10 hits ↑ |
+|---|---:|---:|---:|---:|---:|
+| One-hot Ridge | 0.001653 | 0.033171 | 0.648344 | 87.93% | 7 |
+| One-hot + ESM-2 likelihood Ridge | 0.001645 | 0.033077 | 0.649485 | 88.02% | 7 |
+| Transformer | **0.001148** | **0.022796** | 0.661013 | 90.32% | **9** |
+| Hybrid | 0.001382 | 0.029744 | **0.673649** | **90.88%** | 8 |
+
+Both the Transformer and hybrid improved all listed metrics over these
+baselines. These are descriptive comparisons; the bootstrap intervals
+below do not cover the additional one-hot baselines.
+
+One-hot Ridge selected alpha = 10 using validation Spearman. The
+one-hot + ESM-2 likelihood baseline used fixed alpha = 10 and appended
+the frozen ESM-2 model's unmasked mean residue log-probability to the
+one-hot features. Its target scaler used training and validation labels,
+while Ridge coefficients were fitted on training rows only. Errors
+were evaluated on the original fitness scale.
+
+This adapted baseline excludes CARP and Dayhoff scores and does not
+reproduce the full published FLIP2 augmented Ridge model.
+
+To reproduce the ESM-2 likelihood comparison:
+
+```bash
+python train_onehot_esm_likelihood.py --root .
+```
+
+Results are saved in `outputs_onehot_esm_likelihood/`.
+
 ### Bootstrap Comparisons
 
 Paired bootstrap intervals use 2,000 resamples of test sequences.
@@ -207,6 +240,7 @@ data.py                       Dataset download and sequence encoding
 model_mutation_effect.py      Transformer architecture
 predict_hybrid.py             Hybrid model loading and inference
 use_model.py                  User-facing prediction commands
+train_onehot_esm_likelihood.py  One-hot + ESM-2 likelihood Ridge comparison
 requirements.txt
 runtime_versions.json
 PREDICTION_GUIDE.md
@@ -216,6 +250,8 @@ outputs_rank/                 Transformer checkpoints and predictions
 outputs_esm_ridge/            Ridge parameters, configuration, predictions
 outputs_blend/                Hybrid configuration and predictions
 outputs_official_test/        Metrics, predictions, intervals, and plots
+outputs_onehot_comparison/     One-hot Ridge comparison results
+outputs_onehot_esm_likelihood/ One-hot + ESM-2 likelihood results
 ```
 
 ## Predict Fitness and Rank Candidates
