@@ -336,6 +336,16 @@ The dataset is distributed through FLIP2. Experimental measurements are not orig
 - [Dataset archive](https://doi.org/10.5281/zenodo.18433203)
 - [Official benchmark](https://flip.protein.properties/)
 
+The original alpha-amylase measurements are from Floris van der Flier
+et al., [“Enzyme Structure Correlates with Variant Effect Predictability”](https://doi.org/10.1016/j.csbj.2024.09.007).
+This repository redistributes the FLIP2 by-mutation partitions as separate
+CSV files and includes experimental labels alongside model predictions.
+
+The original repository lists its non-software materials under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The [FLIP2 amylase dataset note](https://zenodo.org/records/18433203/files/amylase/README.md?download=1)
+lists MIT. This repository’s MIT license applies to the project code.
+
 ## AI-Assisted Development
 
 ChatGPT assisted with code development, debugging, evaluation workflows, and documentation. Reported performance values come from computational evaluations of the models.
